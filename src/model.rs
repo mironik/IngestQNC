@@ -277,6 +277,22 @@ fn parent_path(path: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn clip(id: &str) -> ClipCard {
+        ClipCard {
+            id: id.into(),
+            name: format!("{id}.MOV"),
+            duration_sec: 0.0,
+            ingest_status: "scanned".into(),
+            selected: false,
+            source_identity: "card:test:sn-001".into(),
+            clip_fingerprint: format!("fingerprint-{id}"),
+            clip_created_at: String::new(),
+            poster_relative_path: None,
+            poster_source: None,
+            poster_access_path: None,
+        }
+    }
+
     #[test]
     fn duration_label_uses_compact_timecode() {
         assert_eq!(duration_label(0.0), "—");
@@ -293,6 +309,53 @@ mod tests {
         assert!(state.identified_source.is_none());
         assert!(state.source.entries.is_empty());
         assert!(state.status_line.contains("izvor"));
+    }
+
+    #[test]
+    fn clip_selection_toggle_select_all_and_clear_update_state() {
+        let mut state = AppState::new();
+        state.clips = vec![clip("clip-a"), clip("clip-b")];
+
+        state.toggle_clip_selection("clip-a");
+        assert_eq!(state.selected_clip_ids(), vec!["clip-a"]);
+        assert_eq!(state.selected_clip_count(), 1);
+
+        state.toggle_clip_selection("clip-a");
+        assert!(state.selected_clip_ids().is_empty());
+
+        state.select_all_clips();
+        assert_eq!(state.selected_clip_count(), 2);
+        assert_eq!(state.selected_clip_ids(), vec!["clip-a", "clip-b"]);
+
+        state.clear_clip_selection();
+        assert_eq!(state.selected_clip_count(), 0);
+        assert!(state.clips.iter().all(|clip| !clip.selected));
+    }
+
+    #[test]
+    fn replacing_clips_preserves_selection_and_active_clip_by_id() {
+        let mut state = AppState::new();
+        state.clips = vec![clip("clip-a"), clip("clip-b")];
+        state.toggle_clip_selection("clip-b");
+        state.active_clip_id = Some("clip-b".into());
+
+        state.replace_clips_preserving_selection(vec![clip("clip-b"), clip("clip-c")]);
+
+        assert_eq!(state.selected_clip_ids(), vec!["clip-b"]);
+        assert_eq!(state.active_clip_id.as_deref(), Some("clip-b"));
+    }
+
+    #[test]
+    fn replacing_clips_drops_stale_selection_and_moves_missing_active_to_first_clip() {
+        let mut state = AppState::new();
+        state.clips = vec![clip("clip-a"), clip("clip-b")];
+        state.toggle_clip_selection("clip-a");
+        state.active_clip_id = Some("clip-a".into());
+
+        state.replace_clips_preserving_selection(vec![clip("clip-b"), clip("clip-c")]);
+
+        assert!(state.selected_clip_ids().is_empty());
+        assert_eq!(state.active_clip_id.as_deref(), Some("clip-b"));
     }
 
     #[test]

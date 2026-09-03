@@ -101,7 +101,10 @@ impl eframe::App for IngestQncApp {
 #[derive(Debug)]
 enum RuntimeEvent {
     SourceIdentified(Result<IdentifiedSourceRuntime, String>),
-    SourceScanned(Result<ScannedSourceRuntime, String>),
+    SourceScanned {
+        result: Result<ScannedSourceRuntime, String>,
+        probe_follows: bool,
+    },
     ProbeStarted(usize),
     ProbeFinished(Result<ProbedSourceRuntime, String>),
 }
@@ -157,11 +160,17 @@ impl IngestQncApp {
                 .scan_identified_source(&identified.source_identity, &identified.operator_location)
             {
                 Ok(scanned) => {
-                    let _ = tx.send(RuntimeEvent::SourceScanned(Ok(scanned.clone())));
+                    let _ = tx.send(RuntimeEvent::SourceScanned {
+                        result: Ok(scanned.clone()),
+                        probe_follows: true,
+                    });
                     scanned
                 }
                 Err(error) => {
-                    let _ = tx.send(RuntimeEvent::SourceScanned(Err(error.to_string())));
+                    let _ = tx.send(RuntimeEvent::SourceScanned {
+                        result: Err(error.to_string()),
+                        probe_follows: false,
+                    });
                     return;
                 }
             };
@@ -219,7 +228,10 @@ impl IngestQncApp {
             let scanned = runtime
                 .scan_identified_source(&source.source_identity, &source.operator_location)
                 .map_err(|error| error.to_string());
-            let _ = tx.send(RuntimeEvent::SourceScanned(scanned));
+            let _ = tx.send(RuntimeEvent::SourceScanned {
+                result: scanned,
+                probe_follows: false,
+            });
         });
         ctx.request_repaint();
     }
@@ -273,13 +285,19 @@ impl IngestQncApp {
                         self.state.status_line = format!("Identifikacija nije uspjela: {error}");
                     }
                 },
-                RuntimeEvent::SourceScanned(result) => {
+                RuntimeEvent::SourceScanned {
+                    result,
+                    probe_follows,
+                } => {
                     self.source_busy = false;
                     self.state.source.busy = false;
                     match result {
                         Ok(scanned) => {
                             let total = scanned.clips.len();
                             self.apply_clip_snapshot(scanned.clips);
+                            if !probe_follows {
+                                self.state.ingest_busy = false;
+                            }
                             self.state.status_line = format!(
                                 "Skenirano: {} media datoteka, {} klipova u bazi.",
                                 scanned.report.media_files_seen, total
@@ -487,11 +505,13 @@ fn refresh_source_entries(runtime: &RuntimeController, state: &mut AppState) {
             state.source.path = snapshot.path;
             state.source.parent = snapshot.parent;
             state.source.entries = snapshot.entries;
+            state.source.selected_root_label = snapshot.selected_root_label;
             state.source.error = None;
             state.source.busy = false;
         }
         Err(error) => {
             state.source.entries.clear();
+            state.source.selected_root_label = None;
             state.source.error = Some(error.to_string());
             state.source.busy = false;
         }
@@ -501,6 +521,56 @@ fn refresh_source_entries(runtime: &RuntimeController, state: &mut AppState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::ScanRuntimeReport;
+
+    fn clip_card(id: &str) -> ClipCard {
+        ClipCard {
+            id: id.into(),
+            name: format!("{id}.MOV"),
+            duration_sec: 0.0,
+            ingest_status: "scanned".into(),
+            selected: false,
+            source_identity: "card:test:sn-001".into(),
+            clip_fingerprint: format!("fingerprint-{id}"),
+            clip_created_at: String::new(),
+            poster_relative_path: None,
+            poster_source: None,
+            poster_access_path: None,
+        }
+    }
+
+    fn scan_result() -> ScannedSourceRuntime {
+        ScannedSourceRuntime {
+            report: ScanRuntimeReport {
+                source_identity: "card:test:sn-001".into(),
+                files_seen: 1,
+                media_files_seen: 1,
+                clips_inserted: 1,
+                clips_updated: 0,
+                skipped_non_media: 0,
+            },
+            clips: vec![clip_card("clip-a")],
+        }
+    }
+
+    fn test_app() -> IngestQncApp {
+        let (event_tx, event_rx) = mpsc::channel();
+        IngestQncApp {
+            state: AppState::new(),
+            runtime: RuntimeController::from_environment(),
+            event_tx,
+            event_rx,
+            source_busy: false,
+            probe_busy: false,
+            last_clip_poll: None,
+            last_clip_fingerprint: None,
+            poster_loader: PosterAssetLoader::new(),
+            poster_textures: HashMap::new(),
+            poster_texture_paths: HashMap::new(),
+            poster_failures: HashSet::new(),
+            film_frames: Vec::new(),
+        }
+    }
 
     #[test]
     fn refresh_source_entries_keeps_runtime_errors_in_source_state() {
@@ -511,5 +581,45 @@ mod tests {
 
         assert!(state.source.entries.is_empty());
         assert!(!state.source.busy);
+    }
+
+    #[test]
+    fn rescan_source_scanned_event_finishes_ingest_busy_when_probe_does_not_follow() {
+        let mut app = test_app();
+        app.state.ingest_busy = true;
+        app.state.source.busy = true;
+        app.source_busy = true;
+        app.event_tx
+            .send(RuntimeEvent::SourceScanned {
+                result: Ok(scan_result()),
+                probe_follows: false,
+            })
+            .unwrap();
+
+        app.drain_runtime_events(&egui::Context::default());
+
+        assert!(!app.state.ingest_busy);
+        assert!(!app.state.source.busy);
+        assert!(!app.source_busy);
+    }
+
+    #[test]
+    fn full_ingest_source_scanned_event_keeps_ingest_busy_when_probe_follows() {
+        let mut app = test_app();
+        app.state.ingest_busy = true;
+        app.state.source.busy = true;
+        app.source_busy = true;
+        app.event_tx
+            .send(RuntimeEvent::SourceScanned {
+                result: Ok(scan_result()),
+                probe_follows: true,
+            })
+            .unwrap();
+
+        app.drain_runtime_events(&egui::Context::default());
+
+        assert!(app.state.ingest_busy);
+        assert!(!app.state.source.busy);
+        assert!(!app.source_busy);
     }
 }

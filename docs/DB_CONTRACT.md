@@ -123,6 +123,10 @@ The content DB must not contain filmstrip or wave artifact rows.
 - Local disk/card serial and volume/display name are persisted as source
   identity evidence in the registry DB and copied into
   `ingestqnc_content_source_meta` before clip/probe rows are written.
+- For local card media with a card/device/media serial, the durable
+  `source_identity` is `card:<serial>`. Disk labels, volume labels and UI
+  display names are evidence/display metadata only and must not change which
+  content, filmstrip or wave databases are selected.
 - Fallback evidence is stored, but does not replace the durable
   `source_identity`.
 - Rediscovery of the same source updates `last_seen_at`; it must not duplicate

@@ -229,11 +229,7 @@ fn local_identity(
         )
     } else if let Some(serial) = clean_optional(evidence.media_serial.as_deref()) {
         (
-            format!(
-                "card:{}:{}",
-                normalize_id_part(&display_name),
-                normalize_id_part(&serial)
-            ),
+            format!("card:{}", normalize_id_part(&serial)),
             SourceIdentityConfidence::Strong,
             "media_serial".to_string(),
             root_signature_fingerprint(&evidence),
@@ -883,8 +879,9 @@ mod tests {
         let detected =
             detect_source_identity_with_provider(request("operator-root"), &provider).unwrap();
 
-        assert_eq!(detected.record.source_identity, "card:media_card_a:sn-001");
+        assert_eq!(detected.record.source_identity, "card:sn-001");
         assert_eq!(detected.record.source_kind, "local_card");
+        assert_eq!(detected.record.display_name, "MEDIA_CARD_A");
         assert_eq!(
             detected.record.transport_uri,
             "qnc+local://localhost/card/sn-001"
@@ -1011,6 +1008,56 @@ mod tests {
         assert_eq!(
             detected.record.transport_uri,
             "qnc+local://localhost/card/sn-001"
+        );
+    }
+
+    #[test]
+    fn local_card_identity_does_not_depend_on_volume_label() {
+        let media_a = FakeProvider(LocalSourceEvidence {
+            media_serial: Some("SN-001".into()),
+            volume_label: Some("MEDIA_CARD_A".into()),
+            root_exists: true,
+            ..Default::default()
+        });
+        let media_b = FakeProvider(LocalSourceEvidence {
+            media_serial: Some("SN-001".into()),
+            volume_label: Some("RENAMED_CARD".into()),
+            root_exists: true,
+            ..Default::default()
+        });
+
+        let detected_a =
+            detect_source_identity_with_provider(request("operator-root-a"), &media_a).unwrap();
+        let detected_b =
+            detect_source_identity_with_provider(request("operator-root-b"), &media_b).unwrap();
+
+        assert_eq!(detected_a.record.source_identity, "card:sn-001");
+        assert_eq!(
+            detected_a.record.source_identity,
+            detected_b.record.source_identity
+        );
+        assert_eq!(detected_a.record.display_name, "MEDIA_CARD_A");
+        assert_eq!(detected_b.record.display_name, "RENAMED_CARD");
+    }
+
+    #[test]
+    fn local_card_uri_and_os_path_share_source_identity() {
+        let provider = FakeProvider(LocalSourceEvidence {
+            media_serial: Some("SN-001".into()),
+            volume_label: Some("MEDIA_CARD_A".into()),
+            root_exists: true,
+            ..Default::default()
+        });
+
+        let from_os_path =
+            detect_source_identity_with_provider(request("operator-root"), &provider).unwrap();
+        let from_transport =
+            detect_source_identity(request("qnc+local://localhost/card/SN-001")).unwrap();
+
+        assert_eq!(from_os_path.record.source_identity, "card:sn-001");
+        assert_eq!(
+            from_os_path.record.source_identity,
+            from_transport.record.source_identity
         );
     }
 
@@ -1157,7 +1204,7 @@ mod tests {
         let detected_again =
             detect_and_record_source_identity_with_provider(&conn, req, &provider).unwrap();
 
-        assert_eq!(detected.record.source_identity, "card:media_card_a:sn-001");
+        assert_eq!(detected.record.source_identity, "card:sn-001");
         assert_eq!(
             detected_again.record.source_identity,
             detected.record.source_identity

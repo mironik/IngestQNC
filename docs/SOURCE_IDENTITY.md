@@ -17,6 +17,9 @@ runtime contract:
 - `qnc+intranet://gateway/...` for routed intranet sources.
 
 Raw OS paths and discovery evidence stay only in `identity_evidence_json`.
+For directly attached card media, the durable `source_identity` is
+`card:<serial>`. Volume labels, display names and operator hints are descriptive
+metadata only; they must not be part of the durable identity.
 
 ## Evidence Order
 

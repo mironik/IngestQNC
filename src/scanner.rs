@@ -584,7 +584,7 @@ mod tests {
 
     const SEEN_AT: &str = "2026-09-03T10:00:00Z";
     const SEEN_AGAIN_AT: &str = "2026-09-03T11:00:00Z";
-    const SOURCE_IDENTITY: &str = "card:media_card_a:sn-001";
+    const SOURCE_IDENTITY: &str = "card:sn-001";
 
     #[test]
     fn scan_without_recorded_source_identity_fails_before_discovery() {

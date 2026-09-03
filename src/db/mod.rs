@@ -1082,7 +1082,7 @@ mod tests {
 
     fn source(seen_at: &str) -> SourceIdentityRecord {
         SourceIdentityRecord {
-            source_identity: "card:media_card_a:sn-001".into(),
+            source_identity: "card:sn-001".into(),
             source_kind: "local_card".into(),
             display_name: "MEDIA_CARD_A".into(),
             transport_uri: "qnc+local://localhost/card/sn-001".into(),
@@ -1112,10 +1112,10 @@ mod tests {
         seen_at: &str,
     ) -> SourceModuleDatabaseRecord {
         SourceModuleDatabaseRecord {
-            source_identity: "card:media_card_a:sn-001".into(),
+            source_identity: "card:sn-001".into(),
             module_name: module_name.into(),
             database_uri: format!(
-                "qnc+local://localhost/ingest-db/card_media_card_a_sn-001/{module_name}.sqlite"
+                "qnc+local://localhost/ingest-db/card_sn-001/{module_name}.sqlite"
             ),
             module_schema_version: schema_version,
             evidence_json: format!(r#"{{"module":"{module_name}"}}"#),
@@ -1125,7 +1125,7 @@ mod tests {
 
     fn clip(fingerprint: &str, seen_at: &str) -> ClipDiscoveryRecord {
         ClipDiscoveryRecord {
-            source_identity: "card:media_card_a:sn-001".into(),
+            source_identity: "card:sn-001".into(),
             clip_fingerprint: fingerprint.into(),
             relative_path: "DCIM/100QNC/A001_C001.mov".into(),
             original_name: "A001_C001.mov".into(),
@@ -1304,7 +1304,7 @@ mod tests {
                 FROM ingestqnc_sources
                 WHERE source_identity = ?1
                 ",
-            params!["card:media_card_a:sn-001"],
+            params!["card:sn-001"],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )?;
 
@@ -1409,13 +1409,12 @@ mod tests {
 
         let mut moved_wave =
             module_database(MODULE_WAVE, WAVE_SCHEMA_VERSION, "2026-09-03T10:00:00Z");
-        moved_wave.database_uri =
-            "qnc+lan://storage/ingest-db/card_media_card_a_sn-001/wave.sqlite".into();
+        moved_wave.database_uri = "qnc+lan://storage/ingest-db/card_sn-001/wave.sqlite".into();
         upsert_source_module_database(&registry, &moved_wave)?;
 
         let count: i64 = registry.query_row(
             "SELECT COUNT(*) FROM ingestqnc_source_module_databases WHERE source_identity = ?1",
-            params!["card:media_card_a:sn-001"],
+            params!["card:sn-001"],
             |row| row.get(0),
         )?;
         let wave_row: (String, String) = registry.query_row(
@@ -1424,19 +1423,19 @@ mod tests {
             FROM ingestqnc_source_module_databases
             WHERE source_identity = ?1 AND module_name = ?2
             ",
-            params!["card:media_card_a:sn-001", MODULE_WAVE],
+            params!["card:sn-001", MODULE_WAVE],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
 
         assert_eq!(count, 3);
         assert_eq!(
             wave_row.0,
-            "qnc+lan://storage/ingest-db/card_media_card_a_sn-001/wave.sqlite"
+            "qnc+lan://storage/ingest-db/card_sn-001/wave.sqlite"
         );
         assert_eq!(wave_row.1, "2026-09-03T10:00:00Z");
         assert!(source_module_database_exists(
             &registry,
-            "card:media_card_a:sn-001",
+            "card:sn-001",
             MODULE_FILMSTRIP
         )?);
         Ok(())
@@ -1445,10 +1444,7 @@ mod tests {
     #[test]
     fn content_source_identity_is_required_before_clip_rows() -> rusqlite::Result<()> {
         let content_db = open_content_in_memory()?;
-        assert!(!content_source_identity_exists(
-            &content_db,
-            "card:media_card_a:sn-001"
-        )?);
+        assert!(!content_source_identity_exists(&content_db, "card:sn-001")?);
 
         let err = upsert_clip(
             &content_db,
@@ -1458,10 +1454,7 @@ mod tests {
         assert!(matches!(err, rusqlite::Error::SqliteFailure(_, _)));
 
         upsert_content_source_identity(&content_db, &source("2026-09-03T09:00:00Z"))?;
-        assert!(content_source_identity_exists(
-            &content_db,
-            "card:media_card_a:sn-001"
-        )?);
+        assert!(content_source_identity_exists(&content_db, "card:sn-001")?);
         Ok(())
     }
 
@@ -1520,17 +1513,11 @@ mod tests {
     #[test]
     fn source_identity_exists_reads_registry_only() -> rusqlite::Result<()> {
         let registry = open_registry_in_memory()?;
-        assert!(!source_identity_exists(
-            &registry,
-            "card:media_card_a:sn-001"
-        )?);
+        assert!(!source_identity_exists(&registry, "card:sn-001")?);
 
         upsert_source_identity(&registry, &source("2026-09-03T09:00:00Z"))?;
 
-        assert!(source_identity_exists(
-            &registry,
-            "card:media_card_a:sn-001"
-        )?);
+        assert!(source_identity_exists(&registry, "card:sn-001")?);
         assert!(!source_identity_exists(&registry, "card:other")?);
         Ok(())
     }
@@ -1628,7 +1615,7 @@ mod tests {
                 },
             )?;
 
-        assert_eq!(row.0, "card:media_card_a:sn-001");
+        assert_eq!(row.0, "card:sn-001");
         assert_eq!(row.1, "fingerprint-001");
         assert_eq!(row.2, "2026-09-03T09:14:22Z");
         assert_eq!(row.3, Some(12.2));
@@ -1648,7 +1635,7 @@ mod tests {
 
         assert!(source_module_database_exists(
             &registry,
-            "card:media_card_a:sn-001",
+            "card:sn-001",
             "transcript"
         )?);
         Ok(())
