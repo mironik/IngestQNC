@@ -24,6 +24,7 @@ pub fn show(
     source_serial: Option<&str>,
 ) -> LocationBrowserAction {
     let mut action = LocationBrowserAction::None;
+    let source_detail = source_detail_suffix(state, source_serial);
 
     ui.horizontal(|ui| {
         for kind in [SourceKind::Local, SourceKind::Lan, SourceKind::Intranet] {
@@ -54,7 +55,7 @@ pub fn show(
                 action = LocationBrowserAction::OpenPath(String::new());
             }
             ui.add_space(NAV_GAP_W);
-            show_location_breadcrumb(ui, state, source_serial, &mut action);
+            show_location_breadcrumb(ui, state, source_detail.as_deref(), &mut action);
         });
     }
 
@@ -237,7 +238,7 @@ fn location_label(state: &SourceBrowserState) -> String {
 fn show_location_breadcrumb(
     ui: &mut egui::Ui,
     state: &SourceBrowserState,
-    source_serial: Option<&str>,
+    source_detail: Option<&str>,
     action: &mut LocationBrowserAction,
 ) {
     if matches!(state.kind, SourceKind::Local) && state.roots {
@@ -250,7 +251,7 @@ fn show_location_breadcrumb(
                 .size(theme::FONT_UI)
                 .color(TEXT),
         );
-        show_source_serial(ui, source_serial);
+        show_source_detail(ui, source_detail);
         return;
     }
 
@@ -261,7 +262,7 @@ fn show_location_breadcrumb(
                 .size(theme::FONT_UI)
                 .color(TEXT),
         );
-        show_source_serial(ui, source_serial);
+        show_source_detail(ui, source_detail);
         return;
     }
 
@@ -275,12 +276,12 @@ fn show_location_breadcrumb(
                 *action = LocationBrowserAction::OpenPath(path.clone());
             }
         }
-        show_source_serial(ui, source_serial);
+        show_source_detail(ui, source_detail);
     });
 }
 
-fn show_source_serial(ui: &mut egui::Ui, source_serial: Option<&str>) {
-    let Some(source_serial) = source_serial
+fn show_source_detail(ui: &mut egui::Ui, source_detail: Option<&str>) {
+    let Some(source_detail) = source_detail
         .map(str::trim)
         .filter(|value| !value.is_empty())
     else {
@@ -288,10 +289,39 @@ fn show_source_serial(ui: &mut egui::Ui, source_serial: Option<&str>) {
     };
     ui.add_space(10.0);
     ui.label(
-        RichText::new(source_serial)
+        RichText::new(source_detail)
             .size(theme::FONT_UI)
             .color(MUTED),
     );
+}
+
+fn source_detail_suffix(state: &SourceBrowserState, fallback: Option<&str>) -> Option<String> {
+    selected_root_detail(state).or_else(|| {
+        fallback
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+    })
+}
+
+fn selected_root_detail(state: &SourceBrowserState) -> Option<String> {
+    if !matches!(state.kind, SourceKind::Local) || state.roots {
+        return None;
+    }
+    let label = state.selected_root_label.as_deref()?.trim();
+    if label.is_empty() {
+        return None;
+    }
+
+    let columns = root_disk_columns_from(&state.path, label);
+    let mut parts = Vec::new();
+    if !columns.serial.trim().is_empty() {
+        parts.push(columns.serial);
+    }
+    if !columns.name.trim().is_empty() {
+        parts.push(columns.name);
+    }
+    (!parts.is_empty()).then(|| parts.join("   "))
 }
 
 fn show_root_disk_table(
@@ -366,6 +396,10 @@ struct RootDiskColumns {
 fn root_disk_columns(entry: &FsEntry) -> RootDiskColumns {
     let path = clean_location_path(&entry.path);
     let display = root_disk_label(entry);
+    root_disk_columns_from(&path, &display)
+}
+
+fn root_disk_columns_from(path: &str, display: &str) -> RootDiskColumns {
     let drive = if is_windows_drive_rooted(&path) {
         path[..2].to_owned()
     } else if path == "/" {
@@ -380,10 +414,7 @@ fn root_disk_columns(entry: &FsEntry) -> RootDiskColumns {
         short_path(&path)
     };
 
-    let rest = display
-        .strip_prefix(&drive)
-        .unwrap_or(display.as_str())
-        .trim();
+    let rest = display.strip_prefix(&drive).unwrap_or(display).trim();
     let mut parts = rest.split_whitespace();
     let serial = parts.next().unwrap_or_default().to_owned();
     let name = parts.collect::<Vec<_>>().join(" ");
@@ -580,6 +611,19 @@ mod tests {
         assert_eq!(columns.drive, "C:");
         assert_eq!(columns.serial, "z574z57z5");
         assert_eq!(columns.name, "system");
+    }
+
+    #[test]
+    fn selected_root_detail_shows_serial_and_name_without_drive_duplicate() {
+        let mut state = SourceBrowserState::initial();
+        state.roots = false;
+        state.path = "G:\\PRIVATE".into();
+        state.selected_root_label = Some("G:   de666c9f   MEDIA_CARD".into());
+
+        assert_eq!(
+            selected_root_detail(&state),
+            Some("de666c9f   MEDIA_CARD".into())
+        );
     }
 
     #[test]

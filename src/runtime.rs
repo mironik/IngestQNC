@@ -216,6 +216,7 @@ impl RuntimeController {
                 path: path.trim().to_owned(),
                 parent: None,
                 entries: Vec::new(),
+                selected_root_label: None,
             }),
         }
     }
@@ -294,6 +295,7 @@ pub struct SourceEntrySnapshot {
     pub path: String,
     pub parent: Option<String>,
     pub entries: Vec<FsEntry>,
+    pub selected_root_label: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -434,6 +436,7 @@ fn list_local_entries(path: &str) -> Result<SourceEntrySnapshot, RuntimeError> {
             path: String::new(),
             parent: None,
             entries: local_roots(),
+            selected_root_label: None,
         });
     }
 
@@ -466,6 +469,7 @@ fn list_local_entries(path: &str) -> Result<SourceEntrySnapshot, RuntimeError> {
         path: root.to_string_lossy().to_string(),
         parent: local_parent_path(&root),
         entries,
+        selected_root_label: selected_local_root_label(&root),
     })
 }
 
@@ -497,6 +501,17 @@ fn local_root_label(drive: &str) -> String {
         parts.push(name);
     }
     parts.join("   ")
+}
+
+#[cfg(windows)]
+fn selected_local_root_label(path: &Path) -> Option<String> {
+    let text = path.to_string_lossy();
+    let bytes = text.as_bytes();
+    if bytes.len() < 2 || bytes[1] != b':' {
+        return None;
+    }
+    let drive = format!("{}:\\", text.chars().next()?.to_ascii_uppercase());
+    Some(local_root_label(&drive))
 }
 
 #[cfg(windows)]
@@ -561,6 +576,15 @@ fn local_roots() -> Vec<FsEntry> {
         }
     }
     roots
+}
+
+#[cfg(not(windows))]
+fn selected_local_root_label(path: &Path) -> Option<String> {
+    if path.starts_with("/") {
+        Some("/".into())
+    } else {
+        None
+    }
 }
 
 fn local_parent_path(path: &Path) -> Option<String> {

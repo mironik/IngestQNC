@@ -64,7 +64,7 @@ database contract.
 
 - Registry DB: SQLite `user_version` `1`, application id `0x514E4352`,
   metadata table `ingestqnc_registry_meta`.
-- Content DB: SQLite `user_version` `1`, application id `0x514E4343`,
+- Content DB: SQLite `user_version` `2`, application id `0x514E4343`,
   metadata table `ingestqnc_content_meta`.
 - Filmstrip DB: SQLite `user_version` `1`, application id `0x514E4346`,
   metadata table `ingestqnc_filmstrip_meta`.
@@ -120,6 +120,9 @@ The content DB must not contain filmstrip or wave artifact rows.
 
 - IngestQNC must identify a source before scanning clips.
 - Preferred evidence: card/device/media serial or volume/filesystem UUID.
+- Local disk/card serial and volume/display name are persisted as source
+  identity evidence in the registry DB and copied into
+  `ingestqnc_content_source_meta` before clip/probe rows are written.
 - Fallback evidence is stored, but does not replace the durable
   `source_identity`.
 - Rediscovery of the same source updates `last_seen_at`; it must not duplicate

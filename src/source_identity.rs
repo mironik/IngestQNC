@@ -872,6 +872,7 @@ mod tests {
     fn local_card_serial_is_primary_identity() {
         let provider = FakeProvider(LocalSourceEvidence {
             media_serial: Some("SN-001".into()),
+            volume_uuid: Some("windows-volume-serial-de666c9f".into()),
             volume_label: Some("MEDIA_CARD_A".into()),
             top_level_entries: vec!["DCIM".into(), "PRIVATE".into()],
             camera_layout: vec!["DCIM".into(), "PRIVATE".into()],
@@ -891,6 +892,27 @@ mod tests {
         assert_eq!(detected.confidence, SourceIdentityConfidence::Strong);
         assert_eq!(detected.identity_basis, "media_serial");
         assert!(detected.record.fallback_fingerprint.is_some());
+
+        let evidence: serde_json::Value =
+            serde_json::from_str(&detected.record.identity_evidence_json).unwrap();
+        assert_eq!(
+            evidence
+                .pointer("/local/media_serial")
+                .and_then(|v| v.as_str()),
+            Some("SN-001")
+        );
+        assert_eq!(
+            evidence
+                .pointer("/local/volume_uuid")
+                .and_then(|v| v.as_str()),
+            Some("windows-volume-serial-de666c9f")
+        );
+        assert_eq!(
+            evidence
+                .pointer("/local/volume_label")
+                .and_then(|v| v.as_str()),
+            Some("MEDIA_CARD_A")
+        );
     }
 
     #[test]

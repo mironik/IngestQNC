@@ -1092,6 +1092,20 @@ mod tests {
         }
     }
 
+    fn source_with_disk_metadata(seen_at: &str) -> SourceIdentityRecord {
+        let mut record = source(seen_at);
+        record.identity_evidence_json = r#"{
+            "schema_version": 1,
+            "local": {
+                "media_serial": "SN-001",
+                "volume_uuid": "windows-volume-serial-de666c9f",
+                "volume_label": "MEDIA_CARD_A"
+            }
+        }"#
+        .into();
+        record
+    }
+
     fn module_database(
         module_name: &str,
         schema_version: i64,
@@ -1298,6 +1312,73 @@ mod tests {
         assert_eq!(display_name, "MEDIA_CARD_A_RENAMED");
         assert_eq!(first_seen, "2026-09-03T09:00:00Z");
         assert_eq!(last_seen, "2026-09-03T10:00:00Z");
+        Ok(())
+    }
+
+    #[test]
+    fn source_identity_databases_persist_disk_serial_and_name() -> rusqlite::Result<()> {
+        let registry = open_registry_in_memory()?;
+        let content_db = open_content_in_memory()?;
+        let record = source_with_disk_metadata("2026-09-03T09:00:00Z");
+
+        upsert_source_identity(&registry, &record)?;
+        upsert_content_source_identity(&content_db, &record)?;
+
+        let registry_row: (String, String) = registry.query_row(
+            "
+                SELECT display_name, identity_evidence_json
+                FROM ingestqnc_sources
+                WHERE source_identity = ?1
+                ",
+            params![&record.source_identity],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let location_evidence: String = registry.query_row(
+            "
+                SELECT evidence_json
+                FROM ingestqnc_source_locations
+                WHERE source_identity = ?1
+                ",
+            params![&record.source_identity],
+            |row| row.get(0),
+        )?;
+        let content_row: (String, String) = content_db.query_row(
+            "
+                SELECT display_name, identity_evidence_json
+                FROM ingestqnc_content_source_meta
+                WHERE source_identity = ?1
+                ",
+            params![&record.source_identity],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        for (display_name, evidence_json) in [
+            registry_row,
+            ("MEDIA_CARD_A".into(), location_evidence),
+            content_row,
+        ] {
+            let evidence: serde_json::Value = serde_json::from_str(&evidence_json).unwrap();
+            assert_eq!(display_name, "MEDIA_CARD_A");
+            assert_eq!(
+                evidence
+                    .pointer("/local/media_serial")
+                    .and_then(|v| v.as_str()),
+                Some("SN-001")
+            );
+            assert_eq!(
+                evidence
+                    .pointer("/local/volume_uuid")
+                    .and_then(|v| v.as_str()),
+                Some("windows-volume-serial-de666c9f")
+            );
+            assert_eq!(
+                evidence
+                    .pointer("/local/volume_label")
+                    .and_then(|v| v.as_str()),
+                Some("MEDIA_CARD_A")
+            );
+        }
+
         Ok(())
     }
 

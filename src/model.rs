@@ -34,6 +34,8 @@ pub struct SourceBrowserState {
     pub path: String,
     pub parent: Option<String>,
     pub entries: Vec<FsEntry>,
+    #[serde(default)]
+    pub selected_root_label: Option<String>,
     pub error: Option<String>,
     pub busy: bool,
 }
@@ -46,6 +48,7 @@ impl SourceBrowserState {
             path: String::new(),
             parent: None,
             entries: Vec::new(),
+            selected_root_label: None,
             error: None,
             busy: false,
         }
@@ -61,6 +64,7 @@ impl SourceBrowserState {
             parent_path(&self.path)
         };
         self.entries.clear();
+        self.selected_root_label = None;
         self.error = None;
     }
 
@@ -81,6 +85,7 @@ impl SourceBrowserState {
         self.path = location;
         self.parent = None;
         self.entries.clear();
+        self.selected_root_label = None;
         self.error = None;
     }
 }

@@ -214,6 +214,7 @@ fn source_panel(
                 state.source.path.clear();
                 state.source.parent = None;
                 state.source.entries.clear();
+                state.source.selected_root_label = None;
                 state.source.error = None;
             }
             clear_selected_source(state);
@@ -229,6 +230,7 @@ fn source_panel(
                 state.source.path = path.clone();
                 state.source.parent = None;
                 state.source.entries.clear();
+                state.source.selected_root_label = None;
                 state.source.error = None;
             }
             state.status_line = if path.trim().is_empty() {
@@ -273,11 +275,13 @@ fn refresh_source_entries(runtime: &RuntimeController, state: &mut AppState) {
             state.source.path = snapshot.path;
             state.source.parent = snapshot.parent;
             state.source.entries = snapshot.entries;
+            state.source.selected_root_label = snapshot.selected_root_label;
             state.source.error = None;
             state.source.busy = false;
         }
         Err(error) => {
             state.source.entries.clear();
+            state.source.selected_root_label = None;
             state.source.error = Some(error.to_string());
             state.source.busy = false;
         }

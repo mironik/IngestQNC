@@ -24,7 +24,7 @@ use crate::{
 
 const CLIP_POLL_INTERVAL: Duration = Duration::from_millis(1500);
 const POSTER_REQUEST_LIMIT: usize = 16;
-const FILMSTRIP_FRAME_COUNT: usize = 12;
+const FILMSTRIP_FRAME_COUNT: usize = 14;
 
 pub struct IngestQncApp {
     state: AppState,
